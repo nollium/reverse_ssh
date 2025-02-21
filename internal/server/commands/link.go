@@ -53,7 +53,7 @@ func (l *link) ValidArgs() map[string]string {
 		"use-kerberos":      "Instruct client to try and use kerberos ticket when using a proxy",
 		"log-level":         "Set default output logging levels, [INFO,WARNING,ERROR,FATAL,DISABLED]",
 		"ntlm-proxy-creds":  "Set NTLM proxy credentials in format DOMAIN\\USER:PASS",
-		"expose-socks":      "Expose a SOCKS proxy server on the specified port",
+		"expose-socks":      "Expose a SOCKS5 proxy server on the specified port",
 	}
 
 	// Add duplicate flags for owners
@@ -243,6 +243,10 @@ func (l *link) Run(user *users.User, tty io.ReadWriter, line terminal.ParsedLine
 
 	if spaceMatcher.MatchString(buildConfig.Owners) {
 		return errors.New("owners flag cannot contain any whitespace")
+	}
+
+	if socksPort, err := line.GetArgString("expose-socks"); err == nil {
+		buildConfig.SocksPort = socksPort
 	}
 
 	url, err := webserver.Build(buildConfig)

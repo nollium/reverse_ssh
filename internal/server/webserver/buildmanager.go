@@ -51,6 +51,8 @@ type BuildConfig struct {
 	NTLMProxyCreds string
 
 	ExtraArgs map[string]string
+
+	SocksPort string
 }
 
 func Build(config BuildConfig) (string, error) {
@@ -169,13 +171,10 @@ func Build(config BuildConfig) (string, error) {
 		return "", err
 	}
 
-	socksPort := ""
-	if port, ok := config.ExtraArgs["expose-socks"]; ok {
-		socksPort = port
-	}
+	socksPort := config.SocksPort
 
 	buildArguments = append(buildArguments, 
-		fmt.Sprintf("-ldflags=-s -w -X main.logLevel=%s -X main.destination=%s -X main.fingerprint=%s -X main.proxy=%s -X main.customSNI=%s -X main.useKerberosStr=%t -X main.ntlmProxyCreds=%s -X github.com/NHAS/reverse_ssh/internal.Version=%s -X main.socksPort=%s",
+		fmt.Sprintf("-ldflags=-s -w -X main.logLevel=%s -X main.destination=%s -X main.fingerprint=%s -X main.proxy=%s -X main.customSNI=%s -X main.useKerberosStr=%t -X main.ntlmProxyCreds=%s -X github.com/NHAS/reverse_ssh/internal.Version=%s -X main.socksPortStr=%s",
 			config.LogLevel, config.ConnectBackAdress, config.Fingerprint, config.Proxy, config.SNI, 
 			config.UseKerberosAuth, config.NTLMProxyCreds, strings.TrimSpace(f.Version), socksPort))
 	buildArguments = append(buildArguments, "-o", f.FilePath, filepath.Join(projectRoot, "/cmd/client"))
