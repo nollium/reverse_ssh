@@ -53,6 +53,7 @@ func (l *link) ValidArgs() map[string]string {
 		"use-kerberos":      "Instruct client to try and use kerberos ticket when using a proxy",
 		"log-level":         "Set default output logging levels, [INFO,WARNING,ERROR,FATAL,DISABLED]",
 		"ntlm-proxy-creds":  "Set NTLM proxy credentials in format DOMAIN\\USER:PASS",
+		"expose-socks":      "Expose a SOCKS proxy server on the specified port",
 	}
 
 	// Add duplicate flags for owners

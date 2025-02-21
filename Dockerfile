@@ -21,3 +21,7 @@ EXPOSE 2222
 RUN chmod +x /app/docker-entrypoint.sh
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
+
+LABEL org.opencontainers.image.source="https://github.com/nollium/reverse_ssh_ntlm"
+LABEL org.opencontainers.image.description="Reverse SSH Server with NTLM support"
+LABEL org.opencontainers.image.licenses="MIT"

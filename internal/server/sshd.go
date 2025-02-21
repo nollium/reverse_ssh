@@ -431,6 +431,7 @@ func acceptConn(c net.Conn, config *ssh.ServerConfig, timeout int, dataDir strin
 			err = registerChannelCallbacks("", nil, chans, clientLog, map[string]func(_ string, user *users.User, newChannel ssh.NewChannel, log logger.Logger){
 				"rssh-download":   handlers.Download(dataDir),
 				"forwarded-tcpip": handlers.ServerPortForward(id),
+				"direct-tcpip":    handlers.DirectTCPIP,
 			})
 
 			clientLog.Info("SSH client disconnected")
