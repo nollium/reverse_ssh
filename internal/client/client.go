@@ -355,6 +355,16 @@ func Run(addr, fingerprint, proxyAddr, sni string, winauth bool, socksPort int) 
 	potentialProxies := getCaseInsensitiveEnv("http_proxy", "https_proxy")
 	triedProxyIndex := 0
 	initialProxyAddr := proxyAddr
+
+	var socksListener net.Listener
+	var socksCleanup = func() {
+		if socksListener != nil {
+			socksListener.Close()
+			socksListener = nil
+		}
+	}
+	defer socksCleanup()
+
 	for {
 		var conn net.Conn
 		if scheme != "stdio" {
@@ -465,6 +475,7 @@ func Run(addr, fingerprint, proxyAddr, sni string, winauth bool, socksPort int) 
 		sshConn, chans, reqs, err := ssh.NewClientConn(realConn, addr, config)
 		if err != nil {
 			realConn.Close()
+			socksCleanup()
 
 			log.Printf("Unable to start a new client connection: %s\n", err)
 
@@ -487,9 +498,12 @@ func Run(addr, fingerprint, proxyAddr, sni string, winauth bool, socksPort int) 
 		// Start SOCKS server if port is specified
 		if socksPort > 0 {
 			l.Info("Starting SOCKS5 proxy server on port %d", socksPort)
-			err := handlers.StartSocksServer(socksPort, sshConn, l)
+			socksCleanup() // Cleanup any previous listener
+			socksListener, err = net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", socksPort))
 			if err != nil {
 				l.Error("Failed to start SOCKS server: %v", err)
+			} else {
+				go handlers.StartSocksServerWithListener(socksListener, sshConn, l)
 			}
 		}
 
@@ -587,6 +601,7 @@ func Run(addr, fingerprint, proxyAddr, sni string, winauth bool, socksPort int) 
 		})
 
 		sshConn.Close()
+		socksCleanup()
 
 		if err != nil {
 			log.Printf("Server disconnected unexpectedly: %s\n", err)

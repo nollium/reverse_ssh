@@ -23,15 +23,19 @@ func StartSocksServer(port int, sshConn ssh.Conn, log logger.Logger) error {
 		return fmt.Errorf("failed to start SOCKS server: %v", err)
 	}
 
+	go StartSocksServerWithListener(listener, sshConn, log)
+	return nil
+}
+
+func StartSocksServerWithListener(listener net.Listener, sshConn ssh.Conn, log logger.Logger) {
 	server := &socksServer{
 		listener: listener,
 		sshConn:  sshConn,
 		log:      log,
 	}
 
-	go server.serve()
-	log.Info("Started SOCKS server on 0.0.0.0:%d", port)
-	return nil
+	server.serve()
+	log.Info("SOCKS server stopped")
 }
 
 func (s *socksServer) serve() {
