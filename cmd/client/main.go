@@ -69,7 +69,6 @@ func printHelp() {
 	fmt.Println("  -log-level\t\tSet logging level")
 	fmt.Println("  -socks\t\tStart SOCKS5 proxy server on specified port")
 	fmt.Println("  -fg, -foreground\tRun in foreground")
-	fmt.Println("  -child\t\tInternal use only")
 }
 
 func main() {
