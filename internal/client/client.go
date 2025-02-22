@@ -299,7 +299,7 @@ func getCaseInsensitiveEnv(envs ...string) (ret []string) {
 	return ret
 }
 
-func Run(addr, fingerprint, proxyAddr, sni string, winauth bool) {
+func Run(addr, fingerprint, proxyAddr, sni string, winauth bool, socksPort int) {
 
 	sshPriv, sysinfoError := keys.GetPrivateKey()
 	if sysinfoError != nil {
@@ -483,6 +483,15 @@ func Run(addr, fingerprint, proxyAddr, sni string, winauth bool) {
 		}
 
 		log.Println("Successfully connnected", addr)
+
+		// Start SOCKS server if port is specified
+		if socksPort > 0 {
+			l.Info("Starting SOCKS5 proxy server on port %d", socksPort)
+			err := handlers.StartSocksServer(socksPort, sshConn, l)
+			if err != nil {
+				l.Error("Failed to start SOCKS server: %v", err)
+			}
+		}
 
 		go func() {
 

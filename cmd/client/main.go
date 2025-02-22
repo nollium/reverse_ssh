@@ -46,6 +46,7 @@ var (
 	useKerberosStr string
 	logLevel       string
 	ntlmProxyCreds string
+	socksPortStr   string
 )
 
 func printHelp() {
@@ -58,6 +59,7 @@ func printHelp() {
 	fmt.Println("\t\t--process_name\tProcess name shown in tasklist/process list")
 	fmt.Println("\t\t--sni\tWhen using TLS set the clients requested SNI to this value")
 	fmt.Println("\t\t--log-level\tChange logging output levels, [INFO,WARNING,ERROR,FATAL,DISABLED]")
+	fmt.Println("\t\t--socks\tStart SOCKS5 proxy server on specified port")
 	if runtime.GOOS == "windows" {
 		fmt.Println("\t\t--use-kerberos\tUse kerberos authentication on proxy server (if proxy server specified)")
 	}
@@ -67,7 +69,7 @@ func main() {
 	useKerberos = useKerberosStr == "true"
 
 	if len(os.Args) == 0 || ignoreInput == "true" {
-		Run(destination, fingerprint, proxy, customSNI, useKerberos)
+		Run(destination, fingerprint, proxy, customSNI, useKerberos, 0)
 		return
 	}
 
@@ -108,6 +110,15 @@ func main() {
 	userSpecifiedNTLMCreds, err := line.GetArgString("ntlm-proxy-creds")
 	if err == nil {
 		ntlmProxyCreds = userSpecifiedNTLMCreds
+	}
+
+	socksPort := 0
+	if socksPortStr != "" {
+		socksPort, _ = strconv.Atoi(socksPortStr)
+	}
+	userSpecifiedSocksPort, err := line.GetArgString("socks")
+	if err == nil {
+		socksPort, _ = strconv.Atoi(userSpecifiedSocksPort)
 	}
 
 	processArgv, _ := line.GetArgsString("process_name")
@@ -172,20 +183,20 @@ func main() {
 	}
 
 	if fg || child {
-		Run(destination, fingerprint, proxy, customSNI, useKerberos)
+		Run(destination, fingerprint, proxy, customSNI, useKerberos, socksPort)
 		return
 	}
 
 	if strings.HasPrefix(destination, "stdio://") {
 		// We cant fork off of an inetd style connection or stdin/out will be closed
 		log.SetOutput(io.Discard)
-		Run(destination, fingerprint, proxy, customSNI, useKerberos)
+		Run(destination, fingerprint, proxy, customSNI, useKerberos, 0)
 		return
 	}
 
-	err = Fork(destination, fingerprint, proxy, customSNI, useKerberos, processArgv...)
+	err = Fork(destination, fingerprint, proxy, customSNI, useKerberos, socksPort, processArgv...)
 	if err != nil {
-		Run(destination, fingerprint, proxy, customSNI, useKerberos)
+		Run(destination, fingerprint, proxy, customSNI, useKerberos, 0)
 	}
 
 }

