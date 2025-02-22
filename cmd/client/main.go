@@ -38,6 +38,7 @@ var (
 	kerb           = flag.Bool("kerberos", false, "Use Kerberos authentication")
 	logLevelFlag   = flag.String("log-level", "", "Set logging level")
 	child          = flag.Bool("child", false, "Internal use only")
+	ntlmProxyCredsFlag = flag.String("ntlm-proxy-creds", "", "NTLM proxy credentials in format DOMAIN\\USER:PASS")
 )
 
 func fork(path string, sysProcAttr *syscall.SysProcAttr, pretendArgv ...string) error {
@@ -69,6 +70,7 @@ func printHelp() {
 	fmt.Println("  -log-level\t\tSet logging level")
 	fmt.Println("  -socks\t\tStart SOCKS5 proxy server on specified port")
 	fmt.Println("  -fg, -foreground\tRun in foreground")
+	fmt.Println("  -ntlm-proxy-creds\tNTLM proxy credentials (DOMAIN\\USER:PASS)")
 }
 
 func main() {
@@ -92,6 +94,9 @@ func main() {
 	}
 	if *logLevelFlag != "" {
 		logLevel = *logLevelFlag
+	}
+	if *ntlmProxyCredsFlag != "" {
+		ntlmProxyCreds = *ntlmProxyCredsFlag
 	}
 
 	// Handle Windows Kerberos
